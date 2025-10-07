@@ -26,8 +26,7 @@ for x in list:
 
 try:       # initiate PWM object
   while True:
-    time = time.time()
-    b = ((math.sin(2*math.pi*f*time))**2)*100
+    b = ((math.sin(2*math.pi*f*time.time()))**2)*100
     list_objects[25].start(b)
     list_objects[5].start(b+(math.pi/9))
     list_objects[6].start(b+2*(math.pi/9))
