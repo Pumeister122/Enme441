@@ -6,7 +6,7 @@ GPIO.setmode(GPIO.BCM)
 
 list = [25, 5, 6, 13, 19, 26, 12, 16, 20, 21]    # GPIO pin numbers
 list_objects = {}
-f = 500    # frequency (Hz)
+f = .2    # frequency (Hz)
 phase = math.pi / 9    # phase shift (radians)
 
 # set up all pins and create PWM objects
