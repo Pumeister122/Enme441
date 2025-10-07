@@ -25,4 +25,7 @@ try:       # initiate PWM object
 except KeyboardInterrupt:   # stop gracefully on ctrl-C
     print('\nExiting')
 
-GPIO.cleanup()
+finally:
+    for pwm in list_objects.values():
+        pwm.stop()
+    GPIO.cleanup()
