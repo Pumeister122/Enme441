@@ -12,7 +12,7 @@ phase = math.pi / 9    # phase shift (radians)
 # set up all pins and create PWM objects
 for x in list:
     GPIO.setup(x, GPIO.OUT)
-    list_objects[x] = GPIO.PWM(x, f)
+    list_objects[x] = GPIO.PWM(x, 500)
     list_objects[x].start(0)   # start at 0% duty cycle
 
 try:       # initiate PWM object
