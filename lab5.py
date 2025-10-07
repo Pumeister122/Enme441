@@ -17,8 +17,9 @@ for x in list:
 
 try:       # initiate PWM object
     while True:
-        t = time.time()
+        
         for i, x in enumerate(list):
+            t = time.time()
             # Apply phase shift INSIDE the sine function
             b = (math.sin(2 * math.pi * f * t + i * phase)) ** 2 * 100
             list_objects[x].ChangeDutyCycle(b)
