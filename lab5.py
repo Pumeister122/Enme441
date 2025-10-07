@@ -4,7 +4,7 @@ import time
 
 GPIO.setmode(GPIO.BCM)
 
-button = 4
+button = 22
 
 list = [25, 5, 6, 13, 19, 26, 12, 16, 20, 21]    # GPIO pin numbers
 list_objects = {}
