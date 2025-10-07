@@ -20,7 +20,7 @@ for x in list:
 def myCallback(pin):
     global direction
     direction *= -1
-
+GPIO.setup(button, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.add_event_detect(button,gpio.RISING,callback=myCallback,bouncetime = 100)
 
 
