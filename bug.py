@@ -1,101 +1,74 @@
+import RPi.GPIO as GPIO
 import time
 import random
-import RPi.GPIO as GPIO
 from shifter import Shifter
 
-# LED driver pins (BCM)
-DATA_PIN  = 23
-LATCH_PIN = 24
-CLOCK_PIN = 25
-
-# Button pins (BCM)
-BTN_START  = 17  # start/stop
-BTN_TOGGLE = 27  # toggle wrap
-BTN_SPEED  = 22  # 3x speed
+PIN_START = 17
+PIN_TOGGLE = 27
+PIN_SPEED = 22
+PIN_DATA = 23
+PIN_LATCH = 24
+PIN_CLOCK = 25
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
-for p in (BTN_START, BTN_TOGGLE, BTN_SPEED):
-    GPIO.setup(p, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+for switch in [PIN_START, PIN_TOGGLE, PIN_SPEED]:
+    GPIO.setup(switch, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 
-class GlowBug:
-    def __init__(self, delay=0.1, start_at=3, wrap=False):
-        # How long to wait between moves
-        self.delay = float(delay)
-        # Which LED is on (0..7)
-        self.index = int(start_at) % 8
-        # Wrap around ends or stop at edges
-        self.wrap = bool(wrap)
-        # Chip that controls the LEDs
-        self._drv = Shifter(DATA_PIN, LATCH_PIN, CLOCK_PIN)
-        # Is it moving right now?
-        self.active = False
+class Light:
+    def __init__(self, delay=0.1, position=3, wrap=False):
+        self.delay = delay
+        self.position = position
+        self.wrap = wrap
+        self._driver = Shifter(PIN_DATA, PIN_LATCH, PIN_CLOCK)
+        self.running = False
 
-    def play(self):
-        # Start moving
-        self.active = True
+    def begin(self):
+        self.running = True
 
-    def pause(self):
-        # Stop moving and turn off LEDs
-        self.active = False
-        self._drv.shiftByte(0)
+    def freeze(self):
+        self.running = False
+        self._driver.shiftByte(0)
 
-    def tick(self, dt):
-        # Do one move if we are running
-        if not self.active:
+    def move_once(self, pause):
+        if not self.running:
             return
-
-        # Light up only the current LED
-        self._drv.shiftByte(1 << self.index)
-
-        # Move left or right randomly
-        self.index += -1 if random.random() < 0.5 else 1
-
-        # Handle the ends
+        self._driver.shiftByte(1 << self.position)
+        self.position += random.choice([-1, 1])
         if self.wrap:
-            self.index %= 8
+            self.position %= 8
         else:
-            if self.index < 0:
-                self.index = 0
-            elif self.index > 7:
-                self.index = 7
-
-        # Small pause so it doesn't go too fast
-        time.sleep(dt)
+            if self.position < 0:
+                self.position = 0
+            elif self.position > 7:
+                self.position = 7
+        time.sleep(pause)
 
 
-bug = GlowBug()
+light = Light()
 
+def handle_wrap(channel):
+    light.wrap = not light.wrap
+    print("Wrap mode:", light.wrap)
 
-def on_toggle_wrap(channel):
-    # Flip wrap mode each time the button is pressed
-    bug.wrap = not bug.wrap
-    print(f"Wrap mode: {bug.wrap}")
-
-
-# Watch only the toggle button (rising edge = press)
-GPIO.add_event_detect(BTN_TOGGLE, GPIO.RISING, callback=on_toggle_wrap, bouncetime=300)
+GPIO.add_event_detect(PIN_TOGGLE, GPIO.RISING, callback=handle_wrap, bouncetime=300)
 
 try:
     while True:
-        # Start/stop: button HIGH = start, LOW = stop
-        if GPIO.input(BTN_START):
-            if not bug.active:
-                bug.play()
+        if GPIO.input(PIN_START):
+            if not light.running:
+                light.begin()
         else:
-            if bug.active:
-                bug.pause()
-
-        # Speed: button HIGH = 3x faster
-        dt = bug.delay / 3 if GPIO.input(BTN_SPEED) else bug.delay
-
-        # Advance one step
-        bug.tick(dt)
-
+            if light.running:
+                light.freeze()
+        if GPIO.input(PIN_SPEED):
+            wait_time = light.delay / 3
+        else:
+            wait_time = light.delay
+        light.move_once(wait_time)
 except KeyboardInterrupt:
-    pass
-finally:
-    # Clean up on exit
-    bug.pause()
+    light.freeze()
     GPIO.cleanup()
+
