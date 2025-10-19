@@ -1,100 +1,101 @@
 import time
 import random
 import RPi.GPIO as GPIO
-from shifter import SR595
+from shifter import Shifter
 
-# Pins (BCM)
-LED_SER  = 23
-LED_RCLK = 24
-LED_SRCK = 25
+# LED driver pins (BCM)
+DATA_PIN  = 23
+LATCH_PIN = 24
+CLOCK_PIN = 25
 
-BTN_WRAP = 27  # only button we use
+# Button pins (BCM)
+BTN_START  = 17  # start/stop
+BTN_TOGGLE = 27  # toggle wrap
+BTN_SPEED  = 22  # 3x speed
 
-class Firefly:
-    def __init__(self, step_time: float = 0.1, pos: int = 3, wrap_enabled: bool = False):
-        # How fast the light moves
-        self.step_time = float(step_time)
-        self._base_time = float(step_time)
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+for p in (BTN_START, BTN_TOGGLE, BTN_SPEED):
+    GPIO.setup(p, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
+
+class GlowBug:
+    def __init__(self, delay=0.1, start_at=3, wrap=False):
+        # How long to wait between moves
+        self.delay = float(delay)
         # Which LED is on (0..7)
-        self.pos = int(pos) % 8
+        self.index = int(start_at) % 8
+        # Wrap around ends or stop at edges
+        self.wrap = bool(wrap)
+        # Chip that controls the LEDs
+        self._drv = Shifter(DATA_PIN, LATCH_PIN, CLOCK_PIN)
+        # Is it moving right now?
+        self.active = False
 
-        # If True, go around at the ends; else stop at edges
-        self.wrap_enabled = bool(wrap_enabled)
+    def play(self):
+        # Start moving
+        self.active = True
 
-        # Talks to the 74HC595 chip
-        self._driver = SR595(LED_SER, LED_RCLK, LED_SRCK)
+    def pause(self):
+        # Stop moving and turn off LEDs
+        self.active = False
+        self._drv.shiftByte(0)
 
-        # Always running in this version
-        self._active = True
-
-    def set_speed_multiplier(self, k: float):
-        # Bigger k = faster (smaller delay)
-        k = max(1.0, float(k))
-        self.step_time = max(0.001, self._base_time / k)
-
-    def _render(self):
-        # Turn on only the LED at "pos"
-        self._driver.write_byte(1 << self.pos, lsb_first=True)
-
-    def _advance_once(self):
-        # Move one step left or right randomly
-        delta = -1 if random.random() < 0.5 else 1
-        nxt = self.pos + delta
-
-        if self.wrap_enabled:
-            # Go around if we pass the ends
-            self.pos = nxt % 8
-        else:
-            # Stay inside 0..7
-            if nxt < 0:
-                self.pos = 0
-            elif nxt > 7:
-                self.pos = 7
-            else:
-                self.pos = nxt
-
-    def tick(self):
-        # Do one move, then wait a bit
-        if not self._active:
+    def tick(self, dt):
+        # Do one move if we are running
+        if not self.active:
             return
-        self._render()
-        self._advance_once()
-        time.sleep(self.step_time)
+
+        # Light up only the current LED
+        self._drv.shiftByte(1 << self.index)
+
+        # Move left or right randomly
+        self.index += -1 if random.random() < 0.5 else 1
+
+        # Handle the ends
+        if self.wrap:
+            self.index %= 8
+        else:
+            if self.index < 0:
+                self.index = 0
+            elif self.index > 7:
+                self.index = 7
+
+        # Small pause so it doesn't go too fast
+        time.sleep(dt)
 
 
-def main():
-    GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BCM)
-
-    # Button 2 as input with pull-up (pressed = LOW)
-    GPIO.setup(BTN_WRAP, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-    bug = Firefly()
-
-    # When Button 2 changes, flip wrap mode
-    def on_wrap_edge(channel: int):
-        bug.wrap_enabled = not bug.wrap_enabled
-
-    # Watch Button 2 for changes (small debounce)
-    GPIO.add_event_detect(BTN_WRAP, GPIO.BOTH, callback=on_wrap_edge, bouncetime=50)
-
-    try:
-        while True:
-            # Keep the bug moving
-            bug.tick()
-            time.sleep(0.005)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        # Clean up
-        try:
-            GPIO.remove_event_detect(BTN_WRAP)
-        except Exception:
-            pass
-        bug._driver.clear()
-        GPIO.cleanup()
+bug = GlowBug()
 
 
-if __name__ == "__main__":
-    main()
+def on_toggle_wrap(channel):
+    # Flip wrap mode each time the button is pressed
+    bug.wrap = not bug.wrap
+    print(f"Wrap mode: {bug.wrap}")
+
+
+# Watch only the toggle button (rising edge = press)
+GPIO.add_event_detect(BTN_TOGGLE, GPIO.RISING, callback=on_toggle_wrap, bouncetime=300)
+
+try:
+    while True:
+        # Start/stop: button HIGH = start, LOW = stop
+        if GPIO.input(BTN_START):
+            if not bug.active:
+                bug.play()
+        else:
+            if bug.active:
+                bug.pause()
+
+        # Speed: button HIGH = 3x faster
+        dt = bug.delay / 3 if GPIO.input(BTN_SPEED) else bug.delay
+
+        # Advance one step
+        bug.tick(dt)
+
+except KeyboardInterrupt:
+    pass
+finally:
+    # Clean up on exit
+    bug.pause()
+    GPIO.cleanup()
