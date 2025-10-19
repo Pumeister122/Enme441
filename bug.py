@@ -1,74 +1,78 @@
-import RPi.GPIO as GPIO
 import time
 import random
+import RPi.GPIO as GPIO
 from shifter import Shifter
 
-PIN_START = 17
-PIN_TOGGLE = 27
-PIN_SPEED = 22
-PIN_DATA = 23
-PIN_LATCH = 24
-PIN_CLOCK = 25
+# LED driver pins (BCM)
+data  = 23
+latch = 24
+clock = 25
+
+# Button pins (BCM)
+start  = 17
+toggle = 27
+speed  = 22
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
+for p in (start, toggle, speed):
+    GPIO.setup(p, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-for switch in [PIN_START, PIN_TOGGLE, PIN_SPEED]:
-    GPIO.setup(switch, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
+class GlowBug:
+    def __init__(self, delay=0.1, start_at=3, wrap=False):
+        self.delay = float(delay)
+        self.index = int(start_at) % 8
+        self.wrap = bool(wrap)
+        self._drv = Shifter(data, latch, clock)
+        self.active = False
 
-class Light:
-    def __init__(self, delay=0.1, position=3, wrap=False):
-        self.delay = delay
-        self.position = position
-        self.wrap = wrap
-        self._driver = Shifter(PIN_DATA, PIN_LATCH, PIN_CLOCK)
-        self.running = False
+    def play(self):
+        self.active = True
 
-    def begin(self):
-        self.running = True
+    def pause(self):
+        self.active = False
+        self._drv.shiftByte(0)
 
-    def freeze(self):
-        self.running = False
-        self._driver.shiftByte(0)
-
-    def move_once(self, pause):
-        if not self.running:
+    def tick(self, dt):
+        if not self.active:
             return
-        self._driver.shiftByte(1 << self.position)
-        self.position += random.choice([-1, 1])
+        self._drv.shiftByte(1 << self.index)
+        self.index += -1 if random.random() < 0.5 else 1
         if self.wrap:
-            self.position %= 8
+            self.index %= 8
         else:
-            if self.position < 0:
-                self.position = 0
-            elif self.position > 7:
-                self.position = 7
-        time.sleep(pause)
+            if self.index < 0:
+                self.index = 0
+            elif self.index > 7:
+                self.index = 7
+        time.sleep(dt)
 
 
-light = Light()
+bug = GlowBug()
 
-def handle_wrap(channel):
-    light.wrap = not light.wrap
-    print("Wrap mode:", light.wrap)
 
-GPIO.add_event_detect(PIN_TOGGLE, GPIO.RISING, callback=handle_wrap, bouncetime=300)
+def on_toggle_wrap(channel):
+    bug.wrap = not bug.wrap
+    print(f"Wrap mode: {bug.wrap}")
+
+
+GPIO.add_event_detect(toggle, GPIO.RISING, callback=on_toggle_wrap, bouncetime=300)
 
 try:
     while True:
-        if GPIO.input(PIN_START):
-            if not light.running:
-                light.begin()
+        if GPIO.input(start):
+            if not bug.active:
+                bug.play()
         else:
-            if light.running:
-                light.freeze()
-        if GPIO.input(PIN_SPEED):
-            wait_time = light.delay / 3
-        else:
-            wait_time = light.delay
-        light.move_once(wait_time)
+            if bug.active:
+                bug.pause()
+        dt = bug.delay / 3 if GPIO.input(speed) else bug.delay
+        bug.tick(dt)
 except KeyboardInterrupt:
-    light.freeze()
+    pass
+finally:
+    bug.pause()
     GPIO.cleanup()
+
 
