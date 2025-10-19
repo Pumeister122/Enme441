@@ -1,7 +1,7 @@
 import time
 import RPi.GPIO as GPIO
 
-class SR595:
+class Shifter:
     def __init__(self, data_pin, latch_pin, clock_pin):
         # Save the pin numbers
         self.data_pin = data_pin
