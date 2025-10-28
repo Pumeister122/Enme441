@@ -56,7 +56,7 @@ def parsePOSTdata(data):
 #  HTML PAGE BUILDER
 # =========================
 def web_page(selected_led=0):
-    html = """
+  html = """
 <html>
 <head><title>LED Brightness Control</title></head>
 <body>
@@ -65,7 +65,7 @@ def web_page(selected_led=0):
   LED Brightness Control<br><br>
 
   Brightness level:<br>
-  <input type="range" name="brightness" min="0" max="100" value="{brightness[selected_led]}"><br><br>
+  <input type="range" name="brightness" min="0" max="100" value="{brightness[selected_led]}"> <span id="bval"></span>%<br><br>
 
   Select LED:<br>
   <input type="radio" name="led" value="0" {'checked' if selected_led == 0 else ''}> LED 1 ("""" + str(brightness[0])+""""%)<br>
@@ -74,9 +74,20 @@ def web_page(selected_led=0):
 
   <input type="submit" value="Change Brightness">
 </form>
+
+<script>
+(function(){
+  var s = document.querySelector('input[name="brightness"]');
+  var out = document.getElementById('bval');
+  out.textContent = s.value;
+  s.addEventListener('input', function(){ out.textContent = this.value; });
+})();
+</script>
+
 </body>
 </html>
 """
+
     return bytes(html, "utf-8")
 
 
