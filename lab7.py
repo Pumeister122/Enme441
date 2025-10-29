@@ -2,12 +2,10 @@ import socket
 import RPi.GPIO as GPIO
 import time
 
-# =========================
-#  GPIO + PWM SETUP
-# =========================
-led_pins = [5, 6, 26]      # BCM pin numbers for the 3 LEDs
-freq = 1000                # PWM frequency (Hz)
-brightness = [0, 0, 0]     # store current brightness % for each LED
+
+led_pins = [5, 6, 26]      
+freq = 1000                
+brightness = [0, 0, 0]     
 pwms = []
 
 GPIO.setmode(GPIO.BCM)
@@ -18,9 +16,7 @@ for pin in led_pins:
     pwms.append(pwm)
 
 
-# =========================
-#  BRIGHTNESS CONTROL
-# =========================
+
 def change_brightness(index, value):
     """Clamp and set LED brightness."""
     try:
@@ -32,9 +28,6 @@ def change_brightness(index, value):
     pwms[index].ChangeDutyCycle(val)
 
 
-# =========================
-#  POST DATA PARSER
-# =========================
 def parsePOSTdata(data):
     """Extract key:value pairs from POST body."""
     try:
@@ -52,16 +45,12 @@ def parsePOSTdata(data):
     return result
 
 
-# =========================
-#  HTML PAGE BUILDER
-# =========================
 def web_page(selected_led=0):
-    # Precompute checked attributes
+
     c0 = 'checked' if selected_led == 0 else ''
     c1 = 'checked' if selected_led == 1 else ''
     c2 = 'checked' if selected_led == 2 else ''
 
-    # Use triple-single-quoted f-string; align closing quotes with this line
     html = f'''
 <html>
 <head><title>LED Brightness Control</title></head>
@@ -86,13 +75,11 @@ def web_page(selected_led=0):
     return bytes(html, "utf-8")
 
 
-# =========================
-#  WEB SERVER LOOP
-# =========================
+
 def serve_web_page():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(('', 80))  # use 80 if running with sudo
+    s.bind(('', 80))  # 80 for sudo
     s.listen(1)
     print("Server running — visit http://raspberrypi.local:80")
 
@@ -102,7 +89,7 @@ def serve_web_page():
         print(f"Connection from {addr}")
         request = conn.recv(1024)
 
-        selected_led = 0  # default LED
+        selected_led = 0  
 
         if b"POST" in request:
             post_data = parsePOSTdata(request)
@@ -115,7 +102,7 @@ def serve_web_page():
                 except Exception as e:
                     print("Error parsing POST:", e)
 
-        # Send HTTP response
+      
         conn.send(b"HTTP/1.1 200 OK\r\n")
         conn.send(b"Content-Type: text/html\r\n")
         conn.send(b"Connection: close\r\n\r\n")
@@ -125,9 +112,6 @@ def serve_web_page():
             conn.close()
 
 
-# =========================
-#  MAIN
-# =========================
 try:
     serve_web_page()
 except KeyboardInterrupt:
