@@ -2,12 +2,9 @@ import socket
 import RPi.GPIO as GPIO
 import time
 
-# =========================
-#  GPIO + PWM SETUP
-# =========================
-led_pins = [5, 6, 26]      # BCM pin numbers for the 3 LEDs
-freq = 1000                # PWM frequency (Hz)
-brightness = [0, 0, 0]     # store current brightness % for each LED
+led_pins = [5, 6, 26]      
+freq = 1000              
+brightness = [0, 0, 0]    
 pwms = []
 
 GPIO.setmode(GPIO.BCM)
@@ -18,11 +15,9 @@ for pin in led_pins:
     pwms.append(pwm)
 
 
-# =========================
-#  BRIGHTNESS CONTROL
-# =========================
+
 def change_brightness(index, value):
-    """Clamp and set LED brightness."""
+    """Set LED brightness."""
     try:
         val = int(value)
     except:
@@ -32,9 +27,6 @@ def change_brightness(index, value):
     pwms[index].ChangeDutyCycle(val)
 
 
-# =========================
-#  POST DATA PARSER
-# =========================
 def parsePOSTdata(data):
     """Extract key:value pairs from POST body (x-www-form-urlencoded)."""
     try:
@@ -43,22 +35,20 @@ def parsePOSTdata(data):
         text = str(data)
     body_start = text.find('\r\n\r\n') + 4
     body = text[body_start:]
-    # minimal parsing (good enough for short bodies like 'led=1&brightness=77')
+   
     pairs = body.split('&')
     result = {}
     for p in pairs:
         if '=' in p:
             k, v = p.split('=', 1)
-            # replace + with space; percent-decoding not needed for digits
+        
             result[k] = v.replace('+', ' ')
     return result
 
 
-# =========================
-#  HTML + JAVASCRIPT PAGE (Problem 2)
-# =========================
+
 def web_page():
-    # Use a triple-single-quoted f-string to avoid accidental """ conflicts
+  
     html = f'''
 <html>
 <head><title>LED Brightness Control</title></head>
@@ -115,26 +105,24 @@ wireSlider(2);
     return html.encode('utf-8')
 
 
-# =========================
-#  WEB SERVER LOOP
-# =========================
+
 def serve_web_page():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(('', 80))  # run with sudo for port 80
+    s.bind(('', 80))  # 80 for sudo
     s.listen(1)
     print("Server running — visit http://raspberrypi.local:80 (or your Pi's IP)")
 
     while True:
         conn, addr = s.accept()
         try:
-            request = conn.recv(2048)  # a bit larger for safety
-            # Decide by first line (GET/POST)
+            request = conn.recv(2048) 
+           
             first_line = request.split(b'\r\n', 1)[0]
             is_post = first_line.startswith(b'POST')
 
             if is_post:
-                # Parse body and update PWM; respond with tiny text (no reload)
+              
                 data = parsePOSTdata(request)
                 try:
                     if 'led' in data and 'brightness' in data:
@@ -145,13 +133,13 @@ def serve_web_page():
                 except Exception as e:
                     print("POST parse/update error:", e)
 
-                # Minimal HTTP 200 text reply
+                
                 conn.send(b'HTTP/1.1 200 OK\r\n')
                 conn.send(b'Content-Type: text/plain\r\n')
                 conn.send(b'Connection: close\r\n\r\n')
                 conn.send(b'OK')
             else:
-                # Serve the full HTML+JS page on GET
+              
                 conn.send(b'HTTP/1.1 200 OK\r\n')
                 conn.send(b'Content-Type: text/html\r\n')
                 conn.send(b'Connection: close\r\n\r\n')
@@ -160,9 +148,7 @@ def serve_web_page():
             conn.close()
 
 
-# =========================
-#  MAIN
-# =========================
+
 try:
     serve_web_page()
 except KeyboardInterrupt:
